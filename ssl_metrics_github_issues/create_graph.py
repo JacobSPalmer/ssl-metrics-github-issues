@@ -88,10 +88,14 @@ def issue_spoilage_data(
     endDay: int = data.end()
     list_of_spoilage_values = []
     for i in range(endDay - 1):
-        list_of_spoilage_values.append({"day": i, "number_open": len(data.overlap(i-1, i))})
-        print(data.overlap(i-1, i))
-        print("\n")
-    quit()
+        temp_overlap = data.overlap(i - 1, i)
+        proc_overlap = []
+        for issue in temp_overlap:
+            if issue.data["state"] == "open":
+                proc_overlap.append(issue)
+            elif issue.begin != issue.end - 1 and issue.data["endDayOffset"] != 1:
+                proc_overlap.append(issue)
+        list_of_spoilage_values.append({"day": i, "number_open": len(proc_overlap)})
     return list_of_spoilage_values
 
 def plot_OpenIssuesPerDay_Line(
@@ -227,4 +231,9 @@ def main() -> None:
     # print(type(new_list))
 
 if __name__ == "__main__":
-    main()
+    # main()
+    json_input = loadJSON("issues_to_graph.json")
+    i_t = createIntervalTree(json_input)
+    issue_spoilage_data(i_t)
+
+
