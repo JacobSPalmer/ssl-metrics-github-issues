@@ -156,6 +156,19 @@ def plot_OpenClosedIssuesPerDay_Line(
 
     return exists(filename)
 
+def plot_IssueSpoilage(
+        spoilage_data : list
+):
+    figure: Figure = plt.figure()
+
+    plt.title("Number of Issues Per Day")
+    plt.ylabel("Number of Issues")
+    plt.xlabel("Day")
+
+    plt.plot(spoilage_data)
+    figure.show();
+
+
 
 def fillDictBasedOnKeyValue(
     dictionary: dict, tree: IntervalTree, key: str, value: Any
@@ -234,6 +247,7 @@ if __name__ == "__main__":
     # main()
     json_input = loadJSON("issues_to_graph.json")
     i_t = createIntervalTree(json_input)
-    issue_spoilage_data(i_t)
+    spoilage_data = issue_spoilage_data(i_t)
+    plot_IssueSpoilage(spoilage_data)
 
 
