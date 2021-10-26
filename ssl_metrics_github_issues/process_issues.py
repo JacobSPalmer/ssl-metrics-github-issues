@@ -20,6 +20,20 @@ def get_argparse() -> Namespace:
         "ssl-metrics-github-issues tool.",
         default="issues.json",
         type=str,
+        required=True,
+    )
+    parser.add_argument(
+        "-u",
+        "--upper-window-bound",
+        help="Argument to specify the max number of days to look at. NOTE: window bounds are inclusive.",
+        type=int,
+        required=False,
+    )
+    parser.add_argument(
+        "-l",
+        "--lower-window-bound",
+        help="Argument to specify the start of the window of time to analyze. NOTE: window bounds are inclusive.",
+        type=int,
         required=False,
     )
     parser.add_argument(
@@ -35,6 +49,8 @@ def get_argparse() -> Namespace:
 
 def getIssueEngagementReport(
     input_json: str,
+    low_window: int = None,
+    high_window: int = None,
 ) -> list:
 
     with open(input_json, "r") as json_file:
@@ -54,14 +70,51 @@ def getIssueEngagementReport(
 
     removal_List = []
 
-    for issue in data:
-        createdDate: datetime = parse(issue["created_at"]).replace(tzinfo=None)
-        today: datetime = datetime.now(tz=None)
-        if (today - createdDate).days > 40: # TODO: Make this into a command line arg for a window of time
-            removal_List.append(issue)
+    begin: datetime = parse(data[0]['created_at']).replace(tzinfo=None)
 
-    for issue in removal_List:
-        data.remove(issue)
+    if high_window is None and low_window is not None:
+
+        for issue in data:
+            createdDate: datetime = parse(issue["created_at"]).replace(tzinfo=None)
+            if low_window > (createdDate - begin).days:
+                removal_List.append(issue)
+
+        for issue in removal_List:
+            data.remove(issue)
+
+    elif low_window is None and high_window is not None:
+
+        for issue in data:
+            if issue["closed_at"] is not None:
+                closedDate: datetime = parse(issue["closed_at"]).replace(tzinfo=None)
+                if high_window < (closedDate-begin).days:
+                    removal_List.append(issue)
+            else:
+                createdDate: datetime = parse(issue["created_at"]).replace(tzinfo=None)
+                if high_window < (createdDate - begin).days:
+                    removal_List.append(issue)
+
+        for issue in removal_List:
+            data.remove(issue)
+
+    elif high_window is not None and low_window is not None:
+
+        for issue in data:
+            if issue["closed_at"] is not None:
+                closedDate: datetime = parse(issue["closed_at"]).replace(tzinfo=None)
+                if high_window < (closedDate - begin).days < low_window:
+                    removal_List.append(issue)
+            else:
+                createdDate: datetime = parse(issue["created_at"]).replace(tzinfo=None)
+                if high_window < (createdDate - begin).days < low_window:
+                    removal_List.append(issue)
+
+        for issue in removal_List:
+            data.remove(issue)
+
+    else:
+
+        data = data
 
     return data
 
@@ -82,6 +135,8 @@ def main() -> None:
 
     issues_json = getIssueEngagementReport(
         input_json=args.input,
+        low_window=args.lower_window_bound,
+        high_window=args.upper_window_bound,
     )
 
     storeJSON(
