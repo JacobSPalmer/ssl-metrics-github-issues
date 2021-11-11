@@ -1,20 +1,37 @@
 from argparse import ArgumentParser, Namespace
+from collections import KeysView  # had to import this
 from datetime import datetime
 from json import load
 from os.path import exists
-from typing import Any, KeysView
+from typing import Any  # had to import this
 
 import matplotlib.pyplot as plt
 from dateutil.parser import parse
 from intervaltree import IntervalTree
 from matplotlib.figure import Figure
-from progress.bar import Bar
+from progress.spinner import MoonSpinner
 
 
-def get_argparse() -> Namespace:
+def getArgparse() -> Namespace:
     parser: ArgumentParser = ArgumentParser(
         prog="Graph GitHub Issues",
         usage="This program outputs a series of graphs based on GitHub issue data.",
+    )
+    parser.add_argument(
+        "-u",
+        "--upper-window-bound",
+        help="Argument to specify the max number of days to look at. NOTE: window bounds are inclusive.",
+        type=int,
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-l",
+        "--lower-window-bound",
+        help="Argument to specify the start of the window of time to analyze. NOTE: window bounds are inclusive.",
+        type=int,
+        required=False,
+        default=None,
     )
     parser.add_argument(
         "-c",
@@ -30,16 +47,13 @@ def get_argparse() -> Namespace:
         type=str,
         required=True,
     )
-
-
     parser.add_argument(
-        "-l",
+        "-d",
         "--line-of-issues-spoilage-filename",
         help="The filename of the output graph of spoiled issues",
         type=str,
         required=True,
     )
-
     parser.add_argument(
         "-o",
         "--open-issues-graph-filename",
@@ -54,30 +68,44 @@ def get_argparse() -> Namespace:
         type=str,
         required=True,
     )
+    parser.add_argument(
+        "-l",
+        "--lower-window-bound",
+        help="Argument to specify the start of the window of time to analyze. NOTE: window bounds are inclusive.",
+        type=int,
+        required=False,
+        default=0,
+    )
+    parser.add_argument(
+        "-u",
+        "--upper-window-bound",
+        help="Argument to specify the max number of days to look at. NOTE: window bounds are inclusive.",
+        type=int,
+        required=False,
+        default=None,
+    )
 
     return parser.parse_args()
 
 
-def loadJSON(filename: str = "issues.json") -> list:
-    with open(file=filename, mode="r") as jsonFile:
-        return load(jsonFile)
+def loadJSON(filename: str) -> list:
+    try:
+        with open(file=filename, mode="r") as jsonFile:
+            return load(jsonFile)
+    except FileExistsError:
+        print(f"{filename} does not exist.")
+        quit(1)
 
 
-def createIntervalTree(data: list, filename: str = "issues_to_graph1.json") -> IntervalTree:
+def createIntervalTree(data: list, filename: str) -> IntervalTree:
     tree: IntervalTree = IntervalTree()
-    day0: datetime = parse(data[0]["created_at"]).replace(tzinfo=None)
+    # day0: datetime = parse(data[0]["created_at"]).replace(tzinfo=None)
 
-    with Bar(f"Creating interval tree from {filename}... ", max=len(data)) as pb:
+    with MoonSpinner(f"Creating interval tree from {filename}... ") as pb:
+        issue: dict
         for issue in data:
-            createdDate: datetime = parse(issue["created_at"]).replace(tzinfo=None)
-
-            if issue["state"] == "closed":
-                closedDate: datetime = parse(issue["closed_at"]).replace(tzinfo=None)
-            else:
-                closedDate: datetime = datetime.now(tz=None)
-
-            begin: int = (createdDate - day0).days
-            end: int = (closedDate - day0).days
+            begin: int = issue["created_at_day"]
+            end: int = issue["closed_at_day"]
 
             try:
                 issue["endDayOffset"] = 0
@@ -92,9 +120,9 @@ def createIntervalTree(data: list, filename: str = "issues_to_graph1.json") -> I
 
 
 def issue_spoilage_data(
-        data: IntervalTree,
+    data: IntervalTree,
 ):
-    startDay: int = data.begin()
+    # startDay: int = data.begin()
     endDay: int = data.end()
     list_of_spoilage_values = []
     list_of_intervals = []
@@ -108,9 +136,15 @@ def issue_spoilage_data(
                 if issue.begin != issue.end - 1 and issue.data["endDayOffset"] != 1:
                     proc_overlap.append(issue)
                     # list_of_intervals.append(issue.end - startDay)
-            list_of_spoilage_values.append({"day": i+1, "number_open": len(proc_overlap), "intervals": list_of_intervals})
+            list_of_spoilage_values.append(
+                {
+                    "day": i + 1,
+                    "number_open": len(proc_overlap),
+                    "intervals": list_of_intervals,
+                }
+            )
         else:
-            temp_set = data.overlap(i-1, i)
+            temp_set = data.overlap(i - 1, i)
             proc_overlap = []
             for issue in temp_set:
                 # if issue.data["state"] == "open":
@@ -118,13 +152,27 @@ def issue_spoilage_data(
                 if issue.begin != issue.end - 1 and issue.data["endDayOffset"] != 1:
                     proc_overlap.append(issue)
                     # list_of_intervals.append(issue.end - startDay)
-            list_of_spoilage_values.append({"day": i+1, "number_open": len(proc_overlap), "intervals": list_of_intervals})
+            list_of_spoilage_values.append(
+                {
+                    "day": i + 1,
+                    "number_open": len(proc_overlap),
+                    "intervals": list_of_intervals,
+                }
+            )
     return list_of_spoilage_values
 
+
 def plot_IssueSpoilagePerDay(
-  pregeneratedData: list = None,
-  filename: str = "line-of-issues-spoilage_per_day.png",
+    pregeneratedData: list,
+    filename: str,
+    lower_bound=None,
+    upper_bound=None,
 ):
+    args: Namespace = getArgparse()
+
+    if args.upper_window_bound != None:
+        if args.upper_window_bound !=
+
     figure: Figure = plt.figure()
 
     plt.title("Number of Spoiled Issues Per Day")
@@ -143,6 +191,7 @@ def plot_IssueSpoilagePerDay(
     figure.savefig(filename)
 
     return exists(filename)
+
 
 def plot_OpenIssuesPerDay_Line(
     pregeneratedData: dict = None,
@@ -234,9 +283,8 @@ def fillDictBasedOnKeyValue(
     maxKeyValue: int = max(keys)
     minKeyValue: int = min(keys)
 
-    with Bar(
-        f'Getting the total number of "{key} = {value}" issues per day... ',
-        max=maxKeyValue,
+    with MoonSpinner(
+        f'Getting the total number of "{key} = {value}" issues per day... '
     ) as pb:
         for x in range(minKeyValue, maxKeyValue):
             try:
@@ -255,7 +303,7 @@ def fillDictBasedOnKeyValue(
 
 
 def main() -> None:
-    args: Namespace = get_argparse()
+    args: Namespace = getArgparse()
 
     if args.input[-5::] != ".json":
         print("Invalid input file type. Input file must be JSON")
@@ -300,11 +348,11 @@ def main() -> None:
         filename=args.joint_graph_filename,
     )
 
-
     plot_IssueSpoilagePerDay(
         pregeneratedData=new_list,
         filename=args.line_of_issues_spoilage_filename,
     )
+
 
 if __name__ == "__main__":
     # main()
